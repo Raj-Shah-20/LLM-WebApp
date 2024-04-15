@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Call Logs Processor</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+  }
+  .container {
+    max-width: 800px;
+    margin: 50px auto;
+    padding: 20px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+  }
+  .textarea {
+    width: 100%;
+    padding: 10px;
+    border-radius: 5px;
+    border: 1px solid #ccc;
+    margin-bottom: 20px;
+  }
+  .button {
+    padding: 10px 20px;
+    font-size: 16px;
+    background-color: #007bff;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+  }
+  .button:hover {
+    background-color: #0056b3;
+  }
+  .error {
+    color: red;
+    margin-bottom: 20px;
+  }
+  .hidden {
+    display: none;
+  }
+  .highlight-green {
+    color: green;
+  }
+  .highlight-red {
+    color: red;
+  }
+  /* New CSS */
+  .suggestion {
+    margin-bottom: 10px;
+  }
+  /* Updated CSS for buttons */
+  .approveButton, .rejectButton {
+    padding: 5px 10px;
+    margin-left: 10px;
+    font-size: 14px;
+    background-color: #28a745;
+    color: #fff;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+  }
+  .rejectButton {
+    background-color: #dc3545;
+  }
+</style>
+</head>
+<body>
+<div id="questionAnswerScreen" class="container">
+  <h1>Question and Answer Screen</h1>
+  <!-- Add question and answer display elements here -->
+  <div>
+    <textarea id="callLogs" class="textarea" placeholder="Enter call logs..." rows="10" cols="50"></textarea>
+  </div>
+  <div>
+    <button id="processButton" class="button">Process Call Logs</button>
+  </div>
+  <div id="error" class="error"></div>
+  <h2>Extracted Facts:</h2>
+  <ul id="facts"></ul>
+  <h2>View State at Timestamp:</h2>
+  <div>
+    <input type="datetime-local" id="timestampInput">
+    <button id="viewStateButton" class="button">View State</button>
+  </div>
+  <div id="state" class="error"></div>
+  <div>
+    <input type="datetime-local" id="timeSlider" onchange="updateTime()" min="2022-01-01T00:00" max="2024-12-31T23:59">
+    <button id="highlightFactsButton" class="button">Highlight Facts</button>
+  </div>
+  <div id="highlightedFacts"></div>
+  <button id="switchToAddScreenButton" class="button">Switch to Document Addition Screen</button>
+</div>
+
+<div id="documentAdditionScreen" class="container hidden">
+  <h1>Document Addition Screen</h1>
+  <!-- Add document addition elements here -->
+  <div>
+    <label for="documentUrl">Enter Document URL:</label>
+    <input type="text" id="documentUrl" class="textarea" placeholder="Enter document URL...">
+  </div>
+  <div>
+    <label for="question">Enter Question:</label>
+    <input type="text" id="question" class="textarea" placeholder="Enter your question...">
+    <button id="addDocumentButton" class="button">Add Document</button>
+  </div>
+  <div id="suggestions">
+    <!-- Suggestions will be displayed here -->
+  </div>
+  <div>
+    <label for="autoApprove">Auto-approve suggestions:</label>
+    <input type="checkbox" id="autoApprove" onchange="handleAutoApprove()">
+  </div>
+  <button id="switchToQAButton" class="button">Switch to Question and Answer Screen</button>
+</div>
+
+<script>
+  // Function to switch to the question and answer screen
+  function switchToQuestionAnswerScreen() {
+    document.getElementById("questionAnswerScreen").classList.remove("hidden");
+    document.getElementById("documentAdditionScreen").classList.add("hidden");
+  }
+
+  // Function to switch to the document addition screen
+  function switchToDocumentAdditionScreen() {
+    document.getElementById("questionAnswerScreen").classList.add("hidden");
+    document.getElementById("documentAdditionScreen").classList.remove("hidden");
+  }
+
+  // Function to handle processing call logs
+  document.getElementById("processButton").addEventListener("click", async () => {
+    // Get the call logs from the textarea
+    const callLogs = document.getElementById("callLogs").value;
+    // Send request to process call logs
+    try {
+      const response = await fetch('http://localhost:5000/process_call_logs', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ call_logs: callLogs })
+      });
+      const data = await response.json();
+      // Handle response (e.g., display extracted facts)
+      displayFacts(data.facts);
+    } catch (error) {
+      // Handle errors (e.g., show error message)
+      console.error('Error processing call logs:', error);
+    }
+  });
+
+  // Function to handle adding documents
+async function handleAddDocument() {
+    const documentUrl = document.getElementById("documentUrl").value;
+    const question = document.getElementById("question").value;
+    // Send request to add document
+    try {
+        const response = await fetch('http://localhost:5000/add_document', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ document_url: documentUrl, question: question })
+        });
+        const data = await response.json();
+        // Handle response
+        console.log(data.message);
+        // Display extracted facts
+        displayFacts(data.facts);
+        // Update time slider min attribute if this is the first document uploaded
+        if (data.first_upload) {
+            const timestamp = new Date(data.first_upload).toISOString().slice(0, 16); // Format to YYYY-MM-DDTHH:mm
+            document.getElementById("timeSlider").min = timestamp;
+        }
+        // Display suggestions if any
+        displaySuggestions(data.suggestions);
+    } catch (error) {
+        // Handle errors
+        console.error('Error adding document:', error);
+    }
+}
+
+  // Add event listener to the add document button
+  document.getElementById("addDocumentButton").addEventListener("click", handleAddDocument);
+
+
+  // Function to handle viewing state at a timestamp
+  document.getElementById("viewStateButton").addEventListener("click", async () => {
+    const timestamp = document.getElementById("timestampInput").value;
+    // Send request to get state at timestamp
+    try {
+      const response = await fetch(`http://localhost:5000/get_state_at_timestamp?timestamp=${timestamp}`, {
+        method: 'GET',
+      });
+      const data = await response.json();
+      // Handle response (e.g., display state)
+      displayState(data);
+    } catch (error) {
+      // Handle errors (e.g., show error message)
+      console.error('Error getting state at timestamp:', error);
+    }
+  });
+
+  // Function to handle time navigation
+  function updateTime() {
+    const timestamp = document.getElementById("timeSlider").value;
+    document.getElementById("timestampInput").value = timestamp;
+  }
+
+  // Function to display extracted facts
+  function displayFacts(facts) {
+    const factsList = document.getElementById("facts");
+    factsList.innerHTML = ""; // Clear previous facts
+    facts.forEach(fact => {
+      const li = document.createElement("li");
+      li.textContent = fact;
+      factsList.appendChild(li);
+    });
+  }
+
+  // Function to display state
+  function displayState(data) {
+    const stateDiv = document.getElementById("state");
+    stateDiv.textContent = ""; // Clear previous state
+    if (data.error) {
+      stateDiv.textContent = data.error;
+    } else {
+      stateDiv.textContent = "State at Timestamp:\n" + JSON.stringify(data);
+    }
+  }
+
+  // Function to highlight facts added or removed in the last 24 hours
+  document.getElementById("highlightFactsButton").addEventListener("click", async () => {
+    const timestamp = document.getElementById("timeSlider").value;
+    // Send request to highlight facts
+    try {
+      const response = await fetch(`http://localhost:5000/highlight_facts?timestamp=${timestamp}`, {
+        method: 'GET',
+      });
+      const data = await response.json();
+      // Handle response (e.g., display highlighted facts)
+      displayHighlightedFacts(data);
+    } catch (error) {
+      // Handle errors (e.g., show error message)
+      console.error('Error highlighting facts:', error);
+    }
+  });
+
+  // Function to display highlighted facts
+  function displayHighlightedFacts(data) {
+    const highlightedFactsDiv = document.getElementById("highlightedFacts");
+    highlightedFactsDiv.innerHTML = ""; // Clear previous highlighted facts
+    if (data.error) {
+      highlightedFactsDiv.textContent = data.error;
+    } else {
+      const addedFacts = data.added;
+      const removedFacts = data.removed;
+      addedFacts.forEach(fact => {
+        const li = document.createElement("li");
+        li.textContent = fact;
+        li.classList.add("highlight-green");
+        highlightedFactsDiv.appendChild(li);
+      });
+      removedFacts.forEach(fact => {
+        const li = document.createElement("li");
+        li.textContent = fact;
+        li.classList.add("highlight-red");
+        highlightedFactsDiv.appendChild(li);
+      });
+    }
+  }
+
+  document.getElementById("switchToAddScreenButton").addEventListener("click", () => {
+    switchToDocumentAdditionScreen();
+  });
+
+  document.getElementById("switchToQAButton").addEventListener("click", () => {
+    switchToQuestionAnswerScreen();
+  });
+
+  // Function to display suggestions
+function displaySuggestions(suggestions) {
+  const suggestionsDiv = document.getElementById("suggestions");
+  suggestionsDiv.innerHTML = ""; // Clear previous suggestions
+  suggestions.forEach(suggestion => {
+    const suggestionDiv = document.createElement("div");
+    suggestionDiv.classList.add("suggestion");
+    suggestionDiv.innerHTML = `
+      <p>${suggestion.text}</p>
+      <button class="approveButton">Approve</button>
+      <button class="rejectButton">Reject</button>
+    `;
+    // Add event listeners for approve and reject buttons
+    suggestionDiv.querySelector(".approveButton").addEventListener("click", () => {
+      approveSuggestion(suggestion.id);
+    });
+    suggestionDiv.querySelector(".rejectButton").addEventListener("click", () => {
+      rejectSuggestion(suggestion.id);
+    });
+    suggestionsDiv.appendChild(suggestionDiv);
+  });
+}
+
+// Function to approve a suggestion
+async function approveSuggestion(suggestionId) {
+  try {
+    const response = await fetch(`http://localhost:5000/approve_suggestion?suggestion_id=${suggestionId}`, {
+      method: 'POST',
+    });
+    const data = await response.json();
+    // Handle response (e.g., update UI)
+    console.log(data.message);
+    // Refresh suggestions after approval
+    displaySuggestions(data.suggestions);
+  } catch (error) {
+    // Handle errors
+    console.error('Error approving suggestion:', error);
+  }
+}
+
+// Function to reject a suggestion
+async function rejectSuggestion(suggestionId) {
+  try {
+    const response = await fetch(`http://localhost:5000/reject_suggestion?suggestion_id=${suggestionId}`, {
+      method: 'POST',
+    });
+    const data = await response.json();
+    // Handle response (e.g., update UI)
+    console.log(data.message);
+    // Refresh suggestions after rejection
+    displaySuggestions(data.suggestions);
+  } catch (error) {
+    // Handle errors
+    console.error('Error rejecting suggestion:', error);
+  }
+}
+// Function to handle auto-approving suggestions
+function handleAutoApprove() {
+    const autoApproveCheckbox = document.getElementById("autoApprove");
+    if (autoApproveCheckbox.checked) {
+        // Call the function to auto-approve suggestions
+        autoApproveSuggestions();
+    }
+}
+
+// Function to auto-approve suggestions
+async function autoApproveSuggestions() {
+    try {
+        const response = await fetch('http://localhost:5000/auto_approve_suggestions', {
+            method: 'POST',
+        });
+        const data = await response.json();
+        // Handle response (e.g., update UI)
+        console.log(data.message);
+        // Refresh suggestions after auto-approval
+        displaySuggestions(data.suggestions);
+    } catch (error) {
+        // Handle errors
+        console.error('Error auto-approving suggestions:', error);
+    }
+}
+</script>
+
+</body>
+</html>
