@@ -72,7 +72,7 @@
 <body>
 <div id="questionAnswerScreen" class="container">
   <h1>Question and Answer Screen</h1>
-  <!-- Add question and answer display elements here -->
+  <!-- Question and answer display elements -->
   <div>
     <textarea id="callLogs" class="textarea" placeholder="Enter call logs..." rows="10" cols="50"></textarea>
   </div>
@@ -98,7 +98,7 @@
 
 <div id="documentAdditionScreen" class="container hidden">
   <h1>Document Addition Screen</h1>
-  <!-- Add document addition elements here -->
+  <!-- Document addition elements -->
   <div>
     <label for="documentUrl">Enter Document URL:</label>
     <input type="text" id="documentUrl" class="textarea" placeholder="Enter document URL...">
@@ -294,7 +294,7 @@ function displaySuggestions(suggestions) {
       <button class="approveButton">Approve</button>
       <button class="rejectButton">Reject</button>
     `;
-    // Add event listeners for approve and reject buttons
+    // Event listeners for approve and reject buttons
     suggestionDiv.querySelector(".approveButton").addEventListener("click", () => {
       approveSuggestion(suggestion.id);
     });
