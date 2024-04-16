@@ -18,7 +18,7 @@ app = Flask(__name__)
 CORS(app)
 
 # OpenAI API key
-API_KEY = "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"
+API_KEY = ""
 
 # GPT-3 API endpoint
 GPT3_API_URL = "https://api.openai.com/v1/chat/completions"
