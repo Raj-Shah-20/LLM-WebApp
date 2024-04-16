@@ -1,3 +1,4 @@
+import os
 import requests
 from datetime import datetime, timedelta
 from flask import Flask, request, jsonify, send_from_directory
@@ -18,7 +19,7 @@ app = Flask(__name__)
 CORS(app)
 
 # OpenAI API key
-API_KEY = ""
+API_KEY = os.environ.get("OPENAI_API_KEY")
 
 # GPT-3 API endpoint
 GPT3_API_URL = "https://api.openai.com/v1/chat/completions"
