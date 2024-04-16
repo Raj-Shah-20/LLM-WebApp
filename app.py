@@ -1,6 +1,6 @@
 import requests
-import datetime
-from flask import Flask, request, jsonify
+from datetime import datetime, timedelta
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import backoff
 import openai
@@ -18,13 +18,16 @@ app = Flask(__name__)
 CORS(app)
 
 # OpenAI API key
-API_KEY = ""
+API_KEY = "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"
 
 # GPT-3 API endpoint
 GPT3_API_URL = "https://api.openai.com/v1/chat/completions"
 
 client = openai.OpenAI(api_key=API_KEY)
 
+@app.route('/')
+def index():
+    return send_from_directory('/home/rajs20/mysite', 'index.html')
 
 @backoff.on_exception(backoff.expo, openai.RateLimitError)
 def completions_with_backoff(**kwargs):
@@ -45,20 +48,21 @@ def process_call_logs():
 
     # Process the call logs and store the processed document with a timestamp
     processed_document = gpt3_process_call_logs(call_logs)
-    timestamp = datetime.datetime.now()
+    timestamp = datetime.now()
     processed_documents[timestamp] = processed_document
 
     # Return the response
     return jsonify(processed_document)
 
 
+# Modify the return format of the /get_state_at_timestamp endpoint
 @app.route('/get_state_at_timestamp', methods=['GET'])
 def get_state_at_timestamp():
     # Get the timestamp from the request parameters
     timestamp_str = request.args.get('timestamp')
 
     # Convert timestamp string to datetime object
-    timestamp = datetime.datetime.strptime(timestamp_str, '%Y-%m-%dT%H:%M')
+    timestamp = datetime.strptime(timestamp_str, '%Y-%m-%dT%H:%M')
 
     # Find the closest earlier timestamp in processed_documents
     closest_timestamp = min(processed_documents.keys(), key=lambda x: abs(x - timestamp))
@@ -66,8 +70,18 @@ def get_state_at_timestamp():
     # Retrieve the processed document at the closest timestamp
     processed_document = processed_documents.get(closest_timestamp, {})
 
-    # Return the processed document
-    return jsonify(processed_document)
+    # If there are no processed documents or the timestamp is within the last 24 hours,
+    # return an empty response as highlighting is not applicable
+    if not processed_document or (datetime.now() - closest_timestamp) < timedelta(days=1):
+        return jsonify({'status': 'No data available for the given timestamp'})
+
+    # Get the facts from the processed document at the closest timestamp
+    closest_facts = processed_document.get('facts', [])
+
+    # Return the facts along with the timestamp
+    return jsonify({'timestamp': closest_timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+                    'facts': closest_facts})
+
 
 
 @app.route('/add_document', methods=['POST'])
@@ -82,7 +96,7 @@ def add_document():
 
         # Process the document and store it with a timestamp
         processed_document = process_document_from_url(document_url, question)
-        timestamp = datetime.datetime.now()
+        timestamp = datetime.now()
         processed_documents[timestamp] = processed_document
 
         # Return the response
@@ -187,13 +201,46 @@ def submit_question_and_documents():
         results = []
         for document_url in documents:
             processed_document = process_document_from_url(document_url, question)
-            timestamp = datetime.datetime.now()
+            timestamp = datetime.now()
             processed_documents[timestamp] = processed_document
             results.append({'document_url': document_url, 'processed_document': processed_document})
 
         return jsonify({'message': 'Question and documents submitted successfully.', 'status': 'processing', 'results': results})
     else:
         return jsonify({'error': 'Invalid request method.'})
+    
+@app.route('/highlight_facts', methods=['GET'])
+def highlight_facts():
+    # Get the timestamp from the request parameters
+    timestamp_str = request.args.get('timestamp')
+
+    # Convert timestamp string to datetime object
+    timestamp = datetime.strptime(timestamp_str, '%Y-%m-%dT%H:%M')
+
+    # Find the closest earlier timestamp in processed_documents
+    closest_timestamp = min(processed_documents.keys(), key=lambda x: abs(x - timestamp))
+
+    # Retrieve the processed document at the closest timestamp
+    processed_document = processed_documents.get(closest_timestamp, {})
+
+    # If there are no processed documents or the timestamp is within the last 24 hours,
+    # return an empty response as highlighting is not applicable
+    if not processed_document or (datetime.now() - closest_timestamp) < timedelta(days=1):
+        return jsonify({'added': [], 'removed': []})
+
+    # Get the facts from the processed document at the closest timestamp
+    closest_facts = processed_document.get('facts', [])
+
+    # Retrieve the facts from the previous timestamp
+    previous_timestamp = max(t for t in processed_documents.keys() if t < closest_timestamp)
+    previous_facts = processed_documents.get(previous_timestamp, {}).get('facts', [])
+
+    # Identify added and removed facts
+    added_facts = list(set(closest_facts) - set(previous_facts))
+    removed_facts = list(set(previous_facts) - set(closest_facts))
+
+    # Return the highlighted facts
+    return jsonify({'added': added_facts, 'removed': removed_facts})
 
 
 if __name__ == '__main__':

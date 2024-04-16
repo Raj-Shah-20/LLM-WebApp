@@ -233,22 +233,23 @@ async function handleAddDocument() {
     }
   }
 
-  // Function to highlight facts added or removed in the last 24 hours
-  document.getElementById("highlightFactsButton").addEventListener("click", async () => {
+ // Function to handle highlighting facts
+document.getElementById("highlightFactsButton").addEventListener("click", async () => {
     const timestamp = document.getElementById("timeSlider").value;
     // Send request to highlight facts
     try {
-      const response = await fetch(`http://localhost:5000/highlight_facts?timestamp=${timestamp}`, {
-        method: 'GET',
-      });
-      const data = await response.json();
-      // Handle response (e.g., display highlighted facts)
-      displayHighlightedFacts(data);
+        const response = await fetch(`http://localhost:5000/highlight_facts?timestamp=${timestamp}`, {
+            method: 'GET',
+        });
+        const data = await response.json();
+        // Handle response (e.g., display highlighted facts)
+        displayHighlightedFacts(data);
     } catch (error) {
-      // Handle errors (e.g., show error message)
-      console.error('Error highlighting facts:', error);
+        // Handle errors (e.g., show error message)
+        console.error('Error highlighting facts:', error);
     }
-  });
+});
+
 
   // Function to display highlighted facts
   function displayHighlightedFacts(data) {
