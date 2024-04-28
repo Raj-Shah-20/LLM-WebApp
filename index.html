@@ -70,146 +70,75 @@
 </style>
 </head>
 <body>
-<div id="questionAnswerScreen" class="container">
-  <h1>Question and Answer Screen</h1>
-  <!-- Question and answer display elements -->
-  <div>
-    <textarea id="callLogs" class="textarea" placeholder="Enter call logs..." rows="10" cols="50"></textarea>
-  </div>
-  <div>
-    <button id="processButton" class="button">Process Call Logs</button>
-  </div>
-  <div id="error" class="error"></div>
-  <h2>Extracted Facts:</h2>
-  <ul id="facts"></ul>
-  <h2>View State at Timestamp:</h2>
-  <div>
-    <input type="datetime-local" id="timestampInput">
-    <button id="viewStateButton" class="button">View State</button>
-  </div>
-  <div id="state" class="error"></div>
-  <div>
-    <input type="datetime-local" id="timeSlider" onchange="updateTime()" min="2022-01-01T00:00" max="2024-12-31T23:59">
-    <button id="highlightFactsButton" class="button">Highlight Facts</button>
-  </div>
-  <div id="highlightedFacts"></div>
-  <button id="switchToAddScreenButton" class="button">Switch to Document Addition Screen</button>
-</div>
-
-<div id="documentAdditionScreen" class="container hidden">
-  <h1>Document Addition Screen</h1>
-  <!-- Document addition elements -->
-  <div>
-    <label for="documentUrl">Enter Document URL:</label>
-    <input type="text" id="documentUrl" class="textarea" placeholder="Enter document URL...">
-  </div>
+<div id="inputScreen" class="container">
+  <h1>Input Screen</h1>
+  <!-- Input elements -->
   <div>
     <label for="question">Enter Question:</label>
     <input type="text" id="question" class="textarea" placeholder="Enter your question...">
-    <button id="addDocumentButton" class="button">Add Document</button>
-  </div>
-  <div id="suggestions">
-    <!-- Suggestions will be displayed here -->
   </div>
   <div>
-    <label for="autoApprove">Auto-approve suggestions:</label>
-    <input type="checkbox" id="autoApprove" onchange="handleAutoApprove()">
+    <label for="documentUrls">Enter Document URLs:</label>
+    <textarea id="documentUrls" class="textarea" placeholder="Enter document URLs, separated by commas..." rows="5"></textarea>
   </div>
-  <button id="switchToQAButton" class="button">Switch to Question and Answer Screen</button>
+  <div>
+    <button id="submitButton" class="button">Submit</button>
+  </div>
+  <div id="error" class="error"></div>
+</div>
+
+<div id="outputScreen" class="container hidden">
+  <h1>Output Screen</h1>
+  <!-- Output elements -->
+  <h2>Extracted Facts:</h2>
+  <ul id="facts"></ul>
 </div>
 
 <script>
-  // Function to switch to the question and answer screen
-  function switchToQuestionAnswerScreen() {
-    document.getElementById("questionAnswerScreen").classList.remove("hidden");
-    document.getElementById("documentAdditionScreen").classList.add("hidden");
+  // Function to switch to the input screen
+  function switchToInputScreen() {
+    document.getElementById("inputScreen").classList.remove("hidden");
+    document.getElementById("outputScreen").classList.add("hidden");
   }
 
-  // Function to switch to the document addition screen
-  function switchToDocumentAdditionScreen() {
-    document.getElementById("questionAnswerScreen").classList.add("hidden");
-    document.getElementById("documentAdditionScreen").classList.remove("hidden");
+  // Function to switch to the output screen
+  function switchToOutputScreen() {
+    document.getElementById("inputScreen").classList.add("hidden");
+    document.getElementById("outputScreen").classList.remove("hidden");
   }
 
-  // Function to handle processing call logs
-  document.getElementById("processButton").addEventListener("click", async () => {
-    // Get the call logs from the textarea
-    const callLogs = document.getElementById("callLogs").value;
-    // Send request to process call logs
+  // Function to handle submitting question and documents
+  document.getElementById("submitButton").addEventListener("click", async () => {
+    const question = document.getElementById("question").value;
+    const documentUrls = document.getElementById("documentUrls").value.split(",");
+    // Send request to submit question and documents
     try {
-      const response = await fetch('http://localhost:5000/process_call_logs', {
+      const response = await fetch('/submit_question_and_documents', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ call_logs: callLogs })
+        body: JSON.stringify({ question: question, documents: documentUrls })
       });
       const data = await response.json();
-      // Handle response (e.g., display extracted facts)
-      displayFacts(data.facts);
-    } catch (error) {
-      // Handle errors (e.g., show error message)
-      console.error('Error processing call logs:', error);
-    }
-  });
-
-  // Function to handle adding documents
-async function handleAddDocument() {
-    const documentUrl = document.getElementById("documentUrl").value;
-    const question = document.getElementById("question").value;
-    // Send request to add document
-    try {
-        const response = await fetch('http://localhost:5000/add_document', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ document_url: documentUrl, question: question })
-        });
-        const data = await response.json();
-        // Handle response
-        console.log(data.message);
+      // Check if processing is done
+      if (data.status === 'done') {
+        // Switch to the output screen
+        switchToOutputScreen();
         // Display extracted facts
         displayFacts(data.facts);
-        // Update time slider min attribute if this is the first document uploaded
-        if (data.first_upload) {
-            const timestamp = new Date(data.first_upload).toISOString().slice(0, 16); // Format to YYYY-MM-DDTHH:mm
-            document.getElementById("timeSlider").min = timestamp;
-        }
-        // Display suggestions if any
-        displaySuggestions(data.suggestions);
+      } else if (data.status === 'processing') {
+        // Processing is still ongoing
+        document.getElementById("error").textContent = "Processing... Please wait.";
+      } else {
+        // Handle other status
+        document.getElementById("error").textContent = "Error: " + data.error;
+      }
     } catch (error) {
-        // Handle errors
-        console.error('Error adding document:', error);
-    }
-}
-
-  // Add event listener to the add document button
-  document.getElementById("addDocumentButton").addEventListener("click", handleAddDocument);
-
-
-  // Function to handle viewing state at a timestamp
-  document.getElementById("viewStateButton").addEventListener("click", async () => {
-    const timestamp = document.getElementById("timestampInput").value;
-    // Send request to get state at timestamp
-    try {
-      const response = await fetch(`http://localhost:5000/get_state_at_timestamp?timestamp=${timestamp}`, {
-        method: 'GET',
-      });
-      const data = await response.json();
-      // Handle response (e.g., display state)
-      displayState(data);
-    } catch (error) {
-      // Handle errors (e.g., show error message)
-      console.error('Error getting state at timestamp:', error);
+      // Handle errors
+      document.getElementById("error").textContent = "Error: " + error.message;
     }
   });
-
-  // Function to handle time navigation
-  function updateTime() {
-    const timestamp = document.getElementById("timeSlider").value;
-    document.getElementById("timestampInput").value = timestamp;
-  }
 
   // Function to display extracted facts
   function displayFacts(facts) {
@@ -221,149 +150,6 @@ async function handleAddDocument() {
       factsList.appendChild(li);
     });
   }
-
-  // Function to display state
-  function displayState(data) {
-    const stateDiv = document.getElementById("state");
-    stateDiv.textContent = ""; // Clear previous state
-    if (data.error) {
-      stateDiv.textContent = data.error;
-    } else {
-      stateDiv.textContent = "State at Timestamp:\n" + JSON.stringify(data);
-    }
-  }
-
- // Function to handle highlighting facts
-document.getElementById("highlightFactsButton").addEventListener("click", async () => {
-    const timestamp = document.getElementById("timeSlider").value;
-    // Send request to highlight facts
-    try {
-        const response = await fetch(`http://localhost:5000/highlight_facts?timestamp=${timestamp}`, {
-            method: 'GET',
-        });
-        const data = await response.json();
-        // Handle response (e.g., display highlighted facts)
-        displayHighlightedFacts(data);
-    } catch (error) {
-        // Handle errors (e.g., show error message)
-        console.error('Error highlighting facts:', error);
-    }
-});
-
-
-  // Function to display highlighted facts
-  function displayHighlightedFacts(data) {
-    const highlightedFactsDiv = document.getElementById("highlightedFacts");
-    highlightedFactsDiv.innerHTML = ""; // Clear previous highlighted facts
-    if (data.error) {
-      highlightedFactsDiv.textContent = data.error;
-    } else {
-      const addedFacts = data.added;
-      const removedFacts = data.removed;
-      addedFacts.forEach(fact => {
-        const li = document.createElement("li");
-        li.textContent = fact;
-        li.classList.add("highlight-green");
-        highlightedFactsDiv.appendChild(li);
-      });
-      removedFacts.forEach(fact => {
-        const li = document.createElement("li");
-        li.textContent = fact;
-        li.classList.add("highlight-red");
-        highlightedFactsDiv.appendChild(li);
-      });
-    }
-  }
-
-  document.getElementById("switchToAddScreenButton").addEventListener("click", () => {
-    switchToDocumentAdditionScreen();
-  });
-
-  document.getElementById("switchToQAButton").addEventListener("click", () => {
-    switchToQuestionAnswerScreen();
-  });
-
-  // Function to display suggestions
-function displaySuggestions(suggestions) {
-  const suggestionsDiv = document.getElementById("suggestions");
-  suggestionsDiv.innerHTML = ""; // Clear previous suggestions
-  suggestions.forEach(suggestion => {
-    const suggestionDiv = document.createElement("div");
-    suggestionDiv.classList.add("suggestion");
-    suggestionDiv.innerHTML = `
-      <p>${suggestion.text}</p>
-      <button class="approveButton">Approve</button>
-      <button class="rejectButton">Reject</button>
-    `;
-    // Event listeners for approve and reject buttons
-    suggestionDiv.querySelector(".approveButton").addEventListener("click", () => {
-      approveSuggestion(suggestion.id);
-    });
-    suggestionDiv.querySelector(".rejectButton").addEventListener("click", () => {
-      rejectSuggestion(suggestion.id);
-    });
-    suggestionsDiv.appendChild(suggestionDiv);
-  });
-}
-
-// Function to approve a suggestion
-async function approveSuggestion(suggestionId) {
-  try {
-    const response = await fetch(`http://localhost:5000/approve_suggestion?suggestion_id=${suggestionId}`, {
-      method: 'POST',
-    });
-    const data = await response.json();
-    // Handle response (e.g., update UI)
-    console.log(data.message);
-    // Refresh suggestions after approval
-    displaySuggestions(data.suggestions);
-  } catch (error) {
-    // Handle errors
-    console.error('Error approving suggestion:', error);
-  }
-}
-
-// Function to reject a suggestion
-async function rejectSuggestion(suggestionId) {
-  try {
-    const response = await fetch(`http://localhost:5000/reject_suggestion?suggestion_id=${suggestionId}`, {
-      method: 'POST',
-    });
-    const data = await response.json();
-    // Handle response (e.g., update UI)
-    console.log(data.message);
-    // Refresh suggestions after rejection
-    displaySuggestions(data.suggestions);
-  } catch (error) {
-    // Handle errors
-    console.error('Error rejecting suggestion:', error);
-  }
-}
-// Function to handle auto-approving suggestions
-function handleAutoApprove() {
-    const autoApproveCheckbox = document.getElementById("autoApprove");
-    if (autoApproveCheckbox.checked) {
-        // Call the function to auto-approve suggestions
-        autoApproveSuggestions();
-    }
-}
-
-// Function to auto-approve suggestions
-async function autoApproveSuggestions() {
-    try {
-        const response = await fetch('http://localhost:5000/auto_approve_suggestions', {
-            method: 'POST',
-        });
-        const data = await response.json();
-        // Handle response (e.g., update UI)
-        console.log(data.message);
-        // Refresh suggestions after auto-approval
-        displaySuggestions(data.suggestions);
-    } catch (error) {
-        // Handle errors
-        console.error('Error auto-approving suggestions:', error);
-    }
-}
 </script>
 
 </body>
